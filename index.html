@@ -1,0 +1,398 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shopping Cart - Safe Version</title>
+   <link rel="icon" type="image/png"  href="favicon.png.png">
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
+  <style>
+    body { background: linear-gradient(180deg,#a5cdf5 0%,#b9c5d4 100%); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+    .product-card { transition: transform .15s ease, box-shadow .15s ease; border-radius:10px; overflow:hidden; }
+    .product-card:hover { transform: translateY(-6px); box-shadow: 0 12px 30px rgba(20,30,60,0.08); }
+    .card-img-top { height:150px; object-fit:cover; background:#eef3ff; }
+    .cart-panel { max-height:58vh; overflow:auto; padding-right:6px; }
+    .badge-price { font-weight:700; background:#666; border:1px solid rgba(0,0,0,.06); }
+    .empty-cart { color:#666; font-style:italic; }
+    .search-input { width:280px; }
+    @media (max-width:991px) { .search-input{ width:160px; } .card-img-top{ height:140px; } }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap">
+      <h2 class="mb-0">Shopping Cart Simulation</h2>
+      <div class="d-flex gap-2 align-items-center mt-3 mt-lg-0">
+        <input id="search" type="search" class="form-control form-control-sm search-input" placeholder="Search products...">
+        <button id="clear-cart" class="btn btn-sm btn-outline-danger">Empty Cart</button>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-lg-8">
+        <div id="products" class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3"></div>
+      </div>
+
+      <div class="col-lg-4">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h5 class="card-title d-flex justify-content-between align-items-center">
+              <span>Cart</span>
+              <span class="badge bg-secondary" id="cart-count">0</span>
+            </h5>
+            <div id="cart-items" class="cart-panel my-2"></div>
+            <hr>
+            <div class="d-flex justify-content-between align-items-center">
+              <strong>Total:</strong>
+              <h5 id="cart-total" class="mb-0">$0.00</h5>
+            </div>
+            <div class="mt-3 d-grid">
+              <button id="checkout-btn" class="btn btn-primary">Checkout (Demo)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+ 
+    (function () {
+      // products data
+      var products = [
+        { id: 1, name: 'Wireless Headphones', price: 59.99, image: 'https://www.pngarts.com/files/9/Wireless-Headphones-PNG-Image-Background.png' },
+        { id: 2, name: 'Smart Watch', price: 129.99, image: 'https://static.vecteezy.com/system/resources/previews/032/427/657/non_2x/digital-smart-watch-on-abstract-background-generative-ai-photo.jpg' },
+        { id: 3, name: 'Bluetooth Speaker', price: 39.99, image: 'https://www.pngmart.com/files/7/Bluetooth-Speaker-PNG-Image.png' },
+        { id: 4, name: 'Digital Camera', price: 249.99, image: 'https://pisces.bbystatic.com/image2/BestBuy_US/images/products/6275/6275507ld.jpg' },
+        { id: 5, name: 'Laptop Stand', price: 29.99, image: 'https://m.media-amazon.com/images/I/8199s2tKUuL._AC_SL1500_.jpg' },
+        { id: 6, name: 'USB-C Hub', price: 19.99, image: 'https://m.media-amazon.com/images/I/71X0-Zo5srL._AC_.jpg' }
+      ];
+
+      var STORAGE_KEY = 'shoppingCart_v1';
+      var cart = [];
+
+      // DOM refs
+      var productsEl = document.getElementById('products');
+      var cartItemsEl = document.getElementById('cart-items');
+      var cartTotalEl = document.getElementById('cart-total');
+      var cartCountEl = document.getElementById('cart-count');
+      var searchInput = document.getElementById('search');
+      var clearCartBtn = document.getElementById('clear-cart');
+      var checkoutBtn = document.getElementById('checkout-btn');
+
+
+// helpers
+      function formatCurrency(num) { return '$' + Number(num).toFixed(2); }
+      function loadCart() {
+        try {
+          var raw = localStorage.getItem(STORAGE_KEY);
+          cart = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+          cart = [];
+        }
+      }
+      function saveCart() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(cart)); } catch (e) {}
+      }
+      function findCartItem(id) {
+        for (var i = 0; i < cart.length; i++) { if (cart[i].id === id) return cart[i]; }
+        return null;
+      }
+
+      // render products (create elements)
+      function renderProducts(filterTerm) {
+        filterTerm = (filterTerm || '').toString().trim().toLowerCase();
+        // clear
+        while (productsEl.firstChild) productsEl.removeChild(productsEl.firstChild);
+
+        for (var i = 0; i < products.length; i++) {
+          var p = products[i];
+          if (p.name.toLowerCase().indexOf(filterTerm) === -1) continue;
+
+          var col = document.createElement('div');
+          col.className = 'col-md-4 mb-3';
+
+          var card = document.createElement('div');
+          card.className = 'card product-card h-100';
+
+          var img = document.createElement('img');
+          img.className = 'card-img-top';
+          img.setAttribute('src', p.image);
+          img.setAttribute('alt', p.name);
+
+          var body = document.createElement('div');
+          body.className = 'card-body d-flex flex-column';
+
+          var title = document.createElement('h6');
+          title.className = 'card-title mb-2';
+          title.textContent = p.name;
+
+          var priceP = document.createElement('p');
+          priceP.className = 'mb-2';
+          var spanPrice = document.createElement('span');
+          spanPrice.className = 'badge badge-price';
+          spanPrice.textContent = formatCurrency(p.price);
+          priceP.appendChild(spanPrice);
+
+          var footer = document.createElement('div');
+          footer.className = 'mt-auto d-flex gap-2';
+
+          var btnAdd = document.createElement('button');
+          btnAdd.className = 'btn btn-sm btn-outline-primary w-100 add-to-cart';
+          btnAdd.setAttribute('data-id', String(p.id));
+          btnAdd.type = 'button';
+          btnAdd.textContent = 'Add to Cart';
+
+          var btnDetails = document.createElement('button');
+          btnDetails.className = 'btn btn-sm btn-outline-secondary w-100 view-detail';
+          btnDetails.setAttribute('data-id', String(p.id));
+          btnDetails.type = 'button';
+          btnDetails.textContent = 'Details';
+
+          footer.appendChild(btnAdd);
+          footer.appendChild(btnDetails);
+
+          body.appendChild(title);
+          body.appendChild(priceP);
+          body.appendChild(footer);
+
+          card.appendChild(img);
+          card.appendChild(body);
+          col.appendChild(card);
+          productsEl.appendChild(col);
+        }
+      }
+
+      // add to cart
+      function addToCart(productId) {
+        productId = Number(productId);
+        var product = null;
+        for (var i = 0; i < products.length; i++) if (products[i].id === productId) { product = products[i]; break; }
+        if (!product) return;
+        var existing = findCartItem(productId);
+        if (existing) {
+          existing.quantity = existing.quantity + 1;
+        } else {
+          cart.push({ id: product.id, name: product.name, price: product.price, image: product.image, quantity: 1 });
+        }
+        saveCart();
+        renderCart();
+      }
+
+      // render cart
+      function renderCart() {
+        // clear
+        while (cartItemsEl.firstChild) cartItemsEl.removeChild(cartItemsEl.firstChild);
+
+        if (cart.length === 0) {
+          var p = document.createElement('p');
+          p.className = 'empty-cart';
+          p.textContent = 'Your cart is empty.';
+          cartItemsEl.appendChild(p);
+        } else {
+          for (var i = 0; i < cart.length; i++) {
+            var item = cart[i];
+
+
+var root = document.createElement('div');
+            root.className = 'd-flex align-items-center gap-3 mb-3';
+
+            var img = document.createElement('img');
+            img.setAttribute('src', item.image);
+            img.setAttribute('alt', item.name);
+            img.style.width = '60px';
+            img.style.height = '45px';
+            img.style.objectFit = 'cover';
+            img.style.borderRadius = '6px';
+
+            var meta = document.createElement('div');
+            meta.className = 'flex-grow-1';
+            var strong = document.createElement('div');
+            strong.innerHTML = '<strong>' + (item.name) + '</strong>';
+            var smallPrice = document.createElement('div');
+            smallPrice.className = 'text-muted';
+            smallPrice.textContent = formatCurrency(item.price);
+
+            meta.appendChild(strong);
+            meta.appendChild(smallPrice);
+
+            var controls = document.createElement('div');
+            controls.className = 'd-flex justify-content-between align-items-center mt-1';
+
+            var qtyDiv = document.createElement('div');
+
+            var btnMinus = document.createElement('button');
+            btnMinus.className = 'btn btn-sm btn-outline-secondary me-1 change-qty';
+            btnMinus.type = 'button';
+            btnMinus.setAttribute('data-id', String(item.id));
+            btnMinus.setAttribute('data-delta', '-1');
+            btnMinus.textContent = '-';
+
+            var qtySpan = document.createElement('span');
+            qtySpan.className = 'mx-1';
+            qtySpan.textContent = String(item.quantity);
+
+            var btnPlus = document.createElement('button');
+            btnPlus.className = 'btn btn-sm btn-outline-secondary ms-1 change-qty';
+            btnPlus.type = 'button';
+            btnPlus.setAttribute('data-id', String(item.id));
+            btnPlus.setAttribute('data-delta', '1');
+            btnPlus.textContent = '+';
+
+            qtyDiv.appendChild(btnMinus);
+            qtyDiv.appendChild(qtySpan);
+            qtyDiv.appendChild(btnPlus);
+
+            var rightDiv = document.createElement('div');
+            var subtotal = document.createElement('small');
+            subtotal.className = 'text-muted';
+            subtotal.textContent = 'Subtotal: ' + formatCurrency(item.price * item.quantity);
+
+            var btnRemove = document.createElement('button');
+            btnRemove.className = 'btn btn-sm btn-link text-danger ms-2 remove-item';
+            btnRemove.type = 'button';
+            btnRemove.setAttribute('data-id', String(item.id));
+            btnRemove.textContent = 'Remove';
+
+            rightDiv.appendChild(subtotal);
+            rightDiv.appendChild(btnRemove);
+
+            controls.appendChild(qtyDiv);
+            controls.appendChild(rightDiv);
+
+            root.appendChild(img);
+            root.appendChild(meta);
+            root.appendChild(controls);
+
+            cartItemsEl.appendChild(root);
+          }
+        }
+
+        // totals
+        var total = 0;
+        var count = 0;
+        for (var j = 0; j < cart.length; j++) {
+          total += cart[j].price * cart[j].quantity;
+          count += cart[j].quantity;
+        }
+        cartTotalEl.textContent = formatCurrency(total);
+        cartCountEl.textContent = String(count);
+      }
+
+      // update quantity
+      function updateQuantity(id, delta) {
+        id = Number(id);
+        delta = Number(delta);
+        for (var i = 0; i < cart.length; i++) {
+          if (cart[i].id === id) {
+            var newQty = cart[i].quantity + delta;
+            if (newQty <= 0) {
+              cart.splice(i, 1);
+            } else {
+              cart[i].quantity = newQty;
+            }
+            break;
+          }
+        }
+        saveCart();
+        renderCart();
+      }
+
+      // remove item
+      function removeItem(id) {
+        id = Number(id);
+        for (var i = cart.length - 1; i >= 0; i--) {
+          if (cart[i].id === id) cart.splice(i, 1);
+        }
+        saveCart();
+        renderCart();
+      }
+
+
+// clear cart
+      function clearCart() {
+        if (!confirm('Are you sure you want to empty the cart?')) return;
+        cart = [];
+        saveCart();
+        renderCart();
+      }
+
+      // checkout (demo)
+      function checkout() {
+        if (cart.length === 0) {
+          alert('Your cart is empty.');
+          return;
+        }
+        var total = 0;
+        for (var i = 0; i < cart.length; i++) total += cart[i].price * cart[i].quantity;
+        alert('Checkout demo: Total ' + formatCurrency(total) + '\n(You can extend this to a real payment flow)');
+      }
+
+      // init
+      loadCart();
+      renderProducts('');
+      renderCart();
+
+      // events
+      // product buttons (event delegation)
+      productsEl.addEventListener('click', function (e) {
+        var btn = e.target;
+        // climb until button
+        while (btn && btn.tagName !== 'BUTTON') btn = btn.parentElement;
+        if (!btn) return;
+        if (btn.classList.contains('add-to-cart')) {
+          addToCart(btn.getAttribute('data-id'));
+        } else if (btn.classList.contains('view-detail')) {
+          var id = Number(btn.getAttribute('data-id'));
+          var p = null;
+          for (var i = 0; i < products.length; i++) if (products[i].id === id) { p = products[i]; break; }
+          if (p) alert(p.name + '\nPrice: ' + formatCurrency(p.price));
+        }
+      });
+
+      // cart delegation
+      cartItemsEl.addEventListener('click', function (e) {
+        var btn = e.target;
+        while (btn && btn.tagName !== 'BUTTON') btn = btn.parentElement;
+        if (!btn) return;
+        if (btn.classList.contains('change-qty')) {
+          updateQuantity(btn.getAttribute('data-id'), btn.getAttribute('data-delta'));
+        } else if (btn.classList.contains('remove-item')) {
+          removeItem(btn.getAttribute('data-id'));
+        }
+      });
+
+      // search
+      searchInput.addEventListener('input', function (e) {
+        renderProducts(e.target.value || '');
+      });
+
+      // clear & checkout
+      clearCartBtn.addEventListener('click', clearCart);
+      checkoutBtn.addEventListener('click', checkout);
+    })();
+  </script>
+ <!-- Footer -->
+<footer class="site-footer text-center py-4 bg-dark text-white mt-auto">
+  <div class="container">
+    <p class="mb-1">&copy;  All rights reserved</p>
+    <p class="mb-2">Designed & Developed by <strong>Negina Sakhizada</strong></p>
+    <div class="social-icons">
+      <a href="https://github.com/Negina1919" target="_blank" class="text-white me-3"><i class="bi bi-github fs-4"></i></a>
+      <a href="https://x.com/NeginaSakhizada" target="_blank" class="text-white me-3"><i class="bi bi-twitter fs-4"></i></a>
+      <a href="https://t.me/NeginaSakhizada" target="_blank" class="text-white"><i class="bi bi-telegram fs-4"></i></a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
